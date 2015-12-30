@@ -32,6 +32,8 @@ nested_form_fields.bind_nested_forms_links = () ->
     else
       $template.before( $parsed_template )
     $parsed_template.trigger("fields_added.nested_form_fields", {object_class: object_class, added_index: added_index, association_path: association_path, event: event});
+    if $link.data('association-type') == 'has_one'
+      $link.hide()
     false
 
   $('body').off("click", '.remove_nested_fields_link')
@@ -40,7 +42,8 @@ nested_form_fields.bind_nested_forms_links = () ->
     return false unless $.rails.allowAction($link)
     object_class = $link.data('object-class')
     delete_association_field_name = $link.data('delete-association-field-name')
-    removed_index = parseInt(delete_association_field_name.match('(\\d+\\]\\[_destroy])')[0].match('\\d+')[0])
+    removed_index = if has_many_index_destroy_match = delete_association_field_name.match('(\\d+)\\]\\[_destroy]$')
+      parseInt(has_many_index_destroy_match[1])
     $.event.trigger("fields_removing.nested_form_fields",{object_class: object_class, delete_association_field_name: delete_association_field_name, removed_index: removed_index });
     $nested_fields_container = $link.parents(".nested_fields").first()
     delete_field = $nested_fields_container.find("input[type='hidden'][name='#{delete_association_field_name}']")
@@ -51,6 +54,8 @@ nested_form_fields.bind_nested_forms_links = () ->
     $nested_fields_container.hide()
     $nested_fields_container.find('input[required]:hidden').removeAttr('required')
     $nested_fields_container.trigger("fields_removed.nested_form_fields",{object_class: object_class, delete_association_field_name: delete_association_field_name, removed_index: removed_index});
+    association_path = $link.data('association-path')
+    $(".add_nested_fields_link[data-association-path='#{association_path}']").show()
     false
 
 $(document).on "page:change", ->

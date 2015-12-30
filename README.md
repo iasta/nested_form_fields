@@ -1,6 +1,6 @@
 # Nested Form Fields [![Build Status](https://secure.travis-ci.org/ncri/nested_form_fields.png)](http://travis-ci.org/ncri/nested_form_fields)
 
-This Rails gem helps creating forms for models with nested has_many associations.
+This Rails gem helps creating forms for models with nested has_one and has_many associations.
 
 It uses jQuery to dynamically add and remove nested associations.
 

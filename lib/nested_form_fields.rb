@@ -19,7 +19,7 @@ module ActionView::Helpers
       fields_options[:wrapper_options] ||= {}
       fields_options[:namespace] = fields_options[:parent_builder].options[:namespace]
 
-      return fields_for_has_many_association_with_template(record_name, record_object, fields_options, block)
+      return fields_for_association_with_template(record_name, record_object, fields_options, block)
     end
 
 
@@ -27,12 +27,17 @@ module ActionView::Helpers
       html_class = html_options.delete(:class) || {}
       html_data = html_options.delete(:data) || {}
 
+      if association_type(association) == :has_one && object.send(association)
+        html_options[:style] = html_options[:style] ? html_options[:style] + ';' + 'display:none' : 'display:none'
+      end
+
       args = []
       args << (text || "Add #{association.to_s.singularize.humanize}") unless block_given?
       args << ''
       args << { class: "#{html_class.empty? ? '' : html_class} add_nested_fields_link",
                 data: { association_path: association_path(association.to_s),
-                        object_class: association.to_s.singularize }.merge(html_data)
+                        object_class: association.to_s.singularize,
+                        association_type: association_type(association).to_s}.merge(html_data),
               }.merge(html_options)
 
       @template.link_to *args, &block
@@ -47,7 +52,8 @@ module ActionView::Helpers
       args << ''
       args << { class: "#{html_class.empty? ? '' : html_class} remove_nested_fields_link",
                 data: { delete_association_field_name: delete_association_field_name,
-                        object_class: @object.class.name.underscore.downcase }.merge(html_data)
+                        object_class: @object.class.name.underscore.downcase,
+                        association_path: association_path }.merge(html_data),
               }.merge(html_options)
 
       @template.link_to *args, &block
@@ -56,14 +62,18 @@ module ActionView::Helpers
 
     private
 
-    def fields_for_has_many_association_with_template(association_name, association, options, block)
+    def fields_for_association_with_template(association_name, association, options, block)
       name = "#{object_name}[#{association_name}_attributes]"
       association = convert_to_model(association)
 
       if association.respond_to?(:persisted?)
         association = [association]
       elsif !association.respond_to?(:to_ary)
-        association = @object.send(association_name)
+        association = if association_type(association_name) == :has_one
+          []
+        else
+          @object.send(association_name)
+        end
       end
 
       output = ActiveSupport::SafeBuffer.new
@@ -72,8 +82,9 @@ module ActionView::Helpers
         if child._destroy == true
           wrapper_options[:style] = wrapper_options[:style] ? wrapper_options[:style] + ';' + 'display:none' : 'display:none'
         end
+        child_index = association_type(association_name) == :has_one ? '' : "[#{options[:child_index] || nested_child_index(name)}]"
         output << nested_fields_wrapper(association_name, options[:wrapper_tag], options[:legend], wrapper_options) do
-          fields_for_nested_model("#{name}[#{options[:child_index] || nested_child_index(name)}]", child, options, block)
+          fields_for_nested_model("#{name}#{child_index}", child, options, block)
         end
       end
 
@@ -98,7 +109,8 @@ module ActionView::Helpers
                              style: for_template ? 'display:none' : nil ) do
         nested_fields_wrapper(association_name, options[:wrapper_tag], options[:legend], options[:wrapper_options]) do
           association_class = (options[:class_name] || association_name).to_s.classify.constantize
-          fields_for_nested_model("#{name}[#{index_placeholder(association_name)}]",
+          index = association_type(association_name) == :has_one ? '' : "[#{index_placeholder(association_name)}]"
+          fields_for_nested_model("#{name}#{index}",
                                    association_class.new,
                                    options.merge(for_template: true), block)
         end
@@ -109,8 +121,8 @@ module ActionView::Helpers
       "#{association_path(association_name)}_template"
     end
 
-    def association_path association_name
-      "#{object_name.gsub('][','_').gsub(/_attributes/,'').sub('[','_').sub(']','')}_#{association_name}"
+    def association_path association_name=nil
+      ["#{object_name.gsub('][','_').gsub(/_attributes/,'').sub('[','_').sub(']','')}", association_name].compact.join('_')
     end
 
     def index_placeholder association_name
@@ -133,6 +145,10 @@ module ActionView::Helpers
       wrapper_options[:class] = wrapper_options[:class].is_a?(String) ? wrapper_options[:class].split(" ") : wrapper_options[:class].to_a
       wrapper_options[:class] += default_classes
       wrapper_options
+    end
+
+    def association_type association_name
+      object.class.reflect_on_association(association_name).macro
     end
   end
 end
